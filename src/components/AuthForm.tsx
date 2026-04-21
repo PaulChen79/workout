@@ -26,7 +26,7 @@ export default function AuthForm({ userCount }: { userCount: number }) {
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? '發生錯誤'); return; }
-      router.push('/today');
+      router.push('/');
       router.refresh();
     } finally { setLoading(false); }
   }
