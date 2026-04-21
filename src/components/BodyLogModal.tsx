@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 export default function BodyLogModal({ onClose, initialWeight }: { onClose: () => void; initialWeight: number }) {
@@ -30,14 +30,27 @@ export default function BodyLogModal({ onClose, initialWeight }: { onClose: () =
   );
 }
 function Row({ label, unit, value, step, onChange }: { label: string; unit?: string; value: number; step: number; onChange: (v: number) => void }) {
+  const [text, setText] = useState(String(value));
+  const [focused, setFocused] = useState(false);
+  useEffect(() => { if (!focused) setText(String(value)); }, [value, focused]);
+  function commit() {
+    const v = parseFloat(text);
+    if (Number.isNaN(v)) { setText(String(value)); return; }
+    const clamped = Math.max(0, v);
+    onChange(clamped);
+    setText(String(clamped));
+  }
   return (
     <div className="flex items-center justify-between h-12 mb-2 px-3 rounded-xl bg-surface-2 border border-border-2">
       <span className="text-[13px] text-text-muted">{label}</span>
       <div className="flex items-center gap-2">
         <button type="button" onClick={() => onChange(Math.max(0, +(value - step).toFixed(1)))} className="w-8 h-8 rounded bg-surface border border-border-2">−</button>
         <input
-          type="number" inputMode="decimal" step={step} min={0} value={value}
-          onChange={(e) => { const v = parseFloat(e.target.value); if (!Number.isNaN(v)) onChange(Math.max(0, v)); }}
+          type="text" inputMode="decimal" value={text}
+          onFocus={() => setFocused(true)}
+          onBlur={() => { commit(); setFocused(false); }}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur(); }}
           className="w-16 text-center font-mono tabular-nums font-bold bg-transparent outline-none rounded focus:bg-surface"
         />
         {unit && <span className="text-[12px] text-text-dim w-6">{unit}</span>}

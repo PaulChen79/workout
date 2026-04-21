@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { EXERCISES } from '@/lib/workout-data';
 import { estimate1RM } from '@/lib/formula';
@@ -80,14 +80,29 @@ export default function OnboardingForm() {
 }
 
 function Stepper({ label, unit, value, onChange, step, min, max }: { label: string; unit?: string; value: number; onChange: (v: number) => void; step: number; min: number; max: number }) {
+  const [text, setText] = useState(String(value));
+  const [focused, setFocused] = useState(false);
+  useEffect(() => { if (!focused) setText(String(value)); }, [value, focused]);
+
+  function commit() {
+    const v = parseFloat(text);
+    if (Number.isNaN(v)) { setText(String(value)); return; }
+    const clamped = Math.min(max, Math.max(min, v));
+    onChange(clamped);
+    setText(String(clamped));
+  }
+
   return (
     <div className="flex items-center justify-between h-14 px-4 rounded-xl bg-surface-2 border border-border-2">
       <span className="text-[13px] font-semibold text-text-muted">{label}</span>
       <div className="flex items-center gap-2">
         <button type="button" onClick={() => onChange(Math.max(min, +(value - step).toFixed(2)))} className="w-9 h-9 rounded-lg bg-surface border border-border-2 text-xl">−</button>
         <input
-          type="number" inputMode="decimal" step={step} min={min} max={max} value={value}
-          onChange={(e) => { const v = parseFloat(e.target.value); if (!Number.isNaN(v)) onChange(Math.min(max, Math.max(min, v))); }}
+          type="text" inputMode="decimal" value={text}
+          onFocus={() => setFocused(true)}
+          onBlur={() => { commit(); setFocused(false); }}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur(); }}
           className="font-mono text-[18px] font-bold tabular-nums w-20 text-center bg-transparent outline-none rounded focus:bg-surface"
         />
         {unit && <span className="text-[13px] text-text-dim w-6">{unit}</span>}
@@ -102,7 +117,19 @@ function MaxRow({ id, value, onChange }: { id: string; value: number; onChange: 
   const [reps, setReps] = useState(0);
   const [testWeight, setTestWeight] = useState(0);
   const [open, setOpen] = useState(false);
+  const [text, setText] = useState(String(value));
+  const [focused, setFocused] = useState(false);
   const estimate = estimate1RM(testWeight, reps);
+
+  useEffect(() => { if (!focused) setText(String(value)); }, [value, focused]);
+
+  function commit() {
+    const v = parseFloat(text);
+    if (Number.isNaN(v)) { setText(String(value)); return; }
+    const clamped = Math.max(0, v);
+    onChange(clamped);
+    setText(String(clamped));
+  }
 
   return (
     <div className="rounded-xl bg-surface-2 border border-border-2 p-4">
@@ -112,14 +139,17 @@ function MaxRow({ id, value, onChange }: { id: string; value: number; onChange: 
           <div className="text-[11px] text-text-dim">{ex.muscles.join(' · ')}</div>
         </div>
         <div className="flex items-center gap-2">
-          <button type="button" onClick={() => onChange(Math.max(0, value - 2.5))} className="w-8 h-8 rounded-md bg-surface border border-border-2">−</button>
+          <button type="button" onClick={() => onChange(Math.max(0, value - 1))} className="w-8 h-8 rounded-md bg-surface border border-border-2">−</button>
           <input
-            type="number" inputMode="decimal" step={2.5} min={0} value={value}
-            onChange={(e) => { const v = parseFloat(e.target.value); if (!Number.isNaN(v)) onChange(Math.max(0, v)); }}
+            type="text" inputMode="decimal" value={text}
+            onFocus={() => setFocused(true)}
+            onBlur={() => { commit(); setFocused(false); }}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur(); }}
             className="font-mono text-[17px] tabular-nums font-bold w-16 text-center bg-transparent outline-none rounded focus:bg-surface"
           />
           <span className="text-[12px] text-text-dim">kg</span>
-          <button type="button" onClick={() => onChange(value + 2.5)} className="w-8 h-8 rounded-md bg-surface border border-border-2">+</button>
+          <button type="button" onClick={() => onChange(value + 1)} className="w-8 h-8 rounded-md bg-surface border border-border-2">+</button>
         </div>
       </div>
       <button type="button" onClick={() => setOpen(!open)} className="mt-2 text-[11px] text-text-dim underline">用 reps 推估</button>
@@ -128,7 +158,7 @@ function MaxRow({ id, value, onChange }: { id: string; value: number; onChange: 
           <input type="number" value={testWeight || ''} onChange={(e) => setTestWeight(+e.target.value)} placeholder="重量" className="w-20 h-9 rounded bg-surface border border-border-2 px-2 font-mono" />
           <span>×</span>
           <input type="number" value={reps || ''} onChange={(e) => setReps(+e.target.value)} placeholder="reps" className="w-20 h-9 rounded bg-surface border border-border-2 px-2 font-mono" />
-          {estimate && <button type="button" onClick={() => onChange(Math.round(estimate / 2.5) * 2.5)} className="ml-auto text-accent">套用 {Math.round(estimate)}kg</button>}
+          {estimate && <button type="button" onClick={() => onChange(Math.round(estimate))} className="ml-auto text-accent">套用 {Math.round(estimate)}kg</button>}
         </div>
       )}
     </div>

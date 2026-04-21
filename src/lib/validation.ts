@@ -37,3 +37,10 @@ export const onboardingSchema = z.object({
   weightKg: z.number().min(30).max(300),
   maxes: z.array(z.object({ exerciseId: z.string(), valueKg: z.number().positive() })),
 });
+
+export const profilePatchSchema = z.object({
+  name: z.string().min(1).max(50).nullable().optional(),
+  heightCm: z.number().min(100).max(250).nullable().optional(),
+  age: z.number().int().min(10).max(120).nullable().optional(),
+  goal: z.enum(['hypertrophy','strength','powerbuilding','recomp']).nullable().optional(),
+});

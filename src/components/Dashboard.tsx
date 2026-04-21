@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Flame, TrendingUp, Pencil, Plus } from 'lucide-react';
 import { EXERCISES } from '@/lib/workout-data';
@@ -50,7 +51,10 @@ export default function Dashboard({ data }: { data: DashboardData }) {
             {data.age ? ` · ${data.age}歲` : ''}
           </p>
         </div>
-        <button onClick={logout} className="text-[11px] font-semibold text-text-dim">登出</button>
+        <div className="flex items-center gap-3">
+          <Link href="/profile" className="text-[11px] font-semibold text-text-dim hover:text-accent">編輯資料</Link>
+          <button onClick={logout} className="text-[11px] font-semibold text-text-dim">登出</button>
+        </div>
       </header>
 
       <section className="grid grid-cols-2 gap-3">

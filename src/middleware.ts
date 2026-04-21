@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { getIronSession } from 'iron-session';
 import type { SessionData } from '@/lib/session';
 
-const PROTECTED = ['/today', '/progress', '/onboarding'];
+const PROTECTED = ['/today', '/progress', '/onboarding', '/profile'];
 
 export async function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname;
@@ -21,4 +21,4 @@ export async function middleware(req: NextRequest) {
   return res;
 }
 
-export const config = { matcher: ['/today/:path*', '/progress/:path*', '/onboarding'] };
+export const config = { matcher: ['/today/:path*', '/progress/:path*', '/onboarding', '/profile'] };
