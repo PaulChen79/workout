@@ -1,7 +1,8 @@
 import { db } from './client';
-import { workouts } from './schema';
+import { exerciseMaxes, lastWeights, profiles, userProgressionState, workouts } from './schema';
 import { eq, desc, and } from 'drizzle-orm';
-import type { DayKey } from '@/lib/workout-data';
+import { DAY_TEMPLATES, SCHEMES, EXERCISES, type DayKey } from '@/lib/workout-data';
+import { suggestWeight } from '@/lib/formula';
 
 export async function lastWorkoutPerDay(userId: string): Promise<Record<DayKey, Date | null>> {
   const rows = await db.select({ dayKey: workouts.dayKey, finishedAt: workouts.finishedAt })
@@ -21,4 +22,58 @@ export function suggestedDay(last: Record<DayKey, Date | null>): DayKey {
     return ta - tb;
   });
   return order[0];
+}
+
+export interface PlannedSlot {
+  exerciseId: string;
+  name: string;
+  muscles: string[];
+  scheme: string;
+  schemeDisplay: string;
+  sets: number;
+  repLow: number;
+  repHigh: number;
+  pctLabel: string;     // e.g. "80% 1RM"
+  suggestedWeight: number | null;
+  trackable: boolean;
+  isCore: boolean;
+}
+
+export async function buildPlan(userId: string, day: DayKey): Promise<PlannedSlot[]> {
+  const tpl = DAY_TEMPLATES[day];
+  const [profile] = await db.select().from(profiles).where(eq(profiles.userId, userId)).limit(1);
+  const userWeight = profile?.heightCm ? 70 : 70; // placeholder — could use body_logs
+  const maxesRows = await db.select().from(exerciseMaxes).where(eq(exerciseMaxes.userId, userId));
+  const maxes = new Map(maxesRows.map((r) => [r.exerciseId, Number(r.valueKg)]));
+  const lastRows = await db.select().from(lastWeights).where(eq(lastWeights.userId, userId));
+  const lasts = new Map(lastRows.map((r) => [r.exerciseId, Number(r.valueKg)]));
+  const progRows = await db.select().from(userProgressionState).where(eq(userProgressionState.userId, userId));
+  const progMap = new Map(progRows.map((r) => [`${r.exerciseId}:${r.scheme}`, Number(r.currentPct)]));
+
+  const out: PlannedSlot[] = [];
+  for (const slot of tpl.slots) {
+    const ex = EXERCISES[slot.id];
+    const scheme = SCHEMES[slot.scheme];
+    const currentPct = progMap.get(`${slot.id}:${slot.scheme}`) ?? null;
+    const weight = ex.trackable
+      ? suggestWeight({ trackable: true, oneRM: maxes.get(slot.id) ?? null, currentPct, pctLow: scheme.pctLow, pctHigh: scheme.pctHigh })
+      : suggestWeight({ trackable: false, lastWeight: lasts.get(slot.id) ?? null, equip: ex.equip, userWeight });
+    out.push({
+      exerciseId: slot.id, name: ex.name, muscles: ex.muscles, scheme: slot.scheme,
+      schemeDisplay: `${scheme.repLow}-${scheme.repHigh} @ ${Math.round((currentPct ?? scheme.pctLow) * 100)}% 1RM`,
+      sets: slot.sets, repLow: scheme.repLow, repHigh: scheme.repHigh,
+      pctLabel: `${Math.round((currentPct ?? scheme.pctLow) * 100)}%`,
+      suggestedWeight: weight, trackable: ex.trackable, isCore: false,
+    });
+  }
+  for (const coreId of tpl.core) {
+    const ex = EXERCISES[coreId];
+    out.push({
+      exerciseId: coreId, name: ex.name, muscles: ex.muscles, scheme: 'pump',
+      schemeDisplay: ex.timed ? '3×30-60秒' : '3×12-20', sets: 3, repLow: 12, repHigh: 20,
+      pctLabel: '', suggestedWeight: suggestWeight({ trackable: false, lastWeight: lasts.get(coreId) ?? null, equip: ex.equip, userWeight: 70 }),
+      trackable: false, isCore: true,
+    });
+  }
+  return out;
 }
