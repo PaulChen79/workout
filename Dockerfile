@@ -19,7 +19,7 @@ RUN apk add --no-cache dumb-init
 # standalone output + static + public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/public ./public 2>/dev/null || true
+COPY --from=builder /app/public ./public
 # migrations + migrate script must be accessible at runtime
 COPY --from=builder /app/migrations ./migrations
 COPY --from=builder /app/scripts ./scripts
