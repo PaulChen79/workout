@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "migrate": "tsx scripts/migrate.ts",
+    "migrate": "node scripts/migrate.mjs",
     "drizzle:generate": "drizzle-kit generate",
     "test": "tsx --test tests/*.test.ts",
     "lint": "next lint"

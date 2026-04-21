@@ -23,9 +23,8 @@ COPY --from=builder /app/public ./public
 # migrations + migrate script must be accessible at runtime
 COPY --from=builder /app/migrations ./migrations
 COPY --from=builder /app/scripts ./scripts
-COPY --from=builder /app/node_modules/tsx ./node_modules/tsx
 COPY --from=builder /app/node_modules/drizzle-orm ./node_modules/drizzle-orm
 COPY --from=builder /app/node_modules/postgres ./node_modules/postgres
 EXPOSE 3000
 ENTRYPOINT ["dumb-init", "--"]
-CMD ["sh", "-c", "node node_modules/tsx/dist/cli.mjs scripts/migrate.ts && node server.js"]
+CMD ["sh", "-c", "node scripts/migrate.mjs && node server.js"]
