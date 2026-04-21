@@ -8,6 +8,13 @@
       "when": 1776769481670,
       "tag": "0000_harsh_mimic",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1776775953342,
+      "tag": "0001_daffy_triathlon",
+      "breakpoints": true
     }
   ]
 }

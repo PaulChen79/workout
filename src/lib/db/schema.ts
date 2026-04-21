@@ -9,6 +9,7 @@ export const users = pgTable('users', {
   username: text('username').notNull().unique(),
   passwordHash: text('password_hash').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  onboardingGuideSeenAt: timestamp('onboarding_guide_seen_at', { withTimezone: true }),
 });
 
 export const profiles = pgTable('profiles', {
