@@ -48,6 +48,27 @@ test('suggestWeight: non-trackable uses lastWeight', () => {
   assert.equal(w, 25);
 });
 
+test('suggestWeight: non-trackable barbell fallback = max(20, round25(bw*0.4))', () => {
+  // 70 * 0.4 = 28 → round25 = 27.5 → max(20, 27.5) = 27.5
+  assert.equal(suggestWeight({ trackable: false, lastWeight: null, equip: 'barbell', userWeight: 70 }), 27.5);
+  // 40 * 0.4 = 16 → round25 = 15 → max(20, 15) = 20
+  assert.equal(suggestWeight({ trackable: false, lastWeight: null, equip: 'barbell', userWeight: 40 }), 20);
+});
+
+test('suggestWeight: non-trackable cable fallback = max(10, round25(bw*0.3))', () => {
+  // 70 * 0.3 = 21 → round25 = 20 → max(10, 20) = 20
+  assert.equal(suggestWeight({ trackable: false, lastWeight: null, equip: 'cable', userWeight: 70 }), 20);
+});
+
+test('suggestWeight: non-trackable machine fallback = max(10, round25(bw*0.35))', () => {
+  // 70 * 0.35 = 24.5 → round25 = 25 → max(10, 25) = 25
+  assert.equal(suggestWeight({ trackable: false, lastWeight: null, equip: 'machine', userWeight: 70 }), 25);
+});
+
+test('suggestWeight: non-trackable bodyweight returns null', () => {
+  assert.equal(suggestWeight({ trackable: false, lastWeight: null, equip: 'bodyweight', userWeight: 70 }), null);
+});
+
 test('suggestWeight: non-trackable dumbbell fallback from userWeight', () => {
   const w = suggestWeight({ trackable: false, lastWeight: null, equip: 'dumbbell', userWeight: 70 });
   // max(8, round(70*0.15 / 2) * 2) = max(8, round(5.25)*2) = max(8,10) = 10

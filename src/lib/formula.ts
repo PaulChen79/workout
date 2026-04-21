@@ -33,10 +33,26 @@ export function suggestWeight(
     return round25(input.oneRM * pct);
   }
   if (input.lastWeight) return input.lastWeight;
-  if (input.equip === 'dumbbell' && input.userWeight) {
-    return Math.max(8, Math.round((input.userWeight * 0.15) / 2) * 2);
+  // First-time fallback based on equipment type × user body weight.
+  // Kept conservative — the user will Edit on the workout screen.
+  const bw = input.userWeight ?? 70;
+  switch (input.equip) {
+    case 'dumbbell':
+      // Single-dumbbell accessory work (rows / curls / lateral raise) — 15% bw, 2kg increments.
+      return Math.max(8, Math.round((bw * 0.15) / 2) * 2);
+    case 'barbell':
+      // Accessory barbell (incline bench, front squat) — start near empty bar.
+      return Math.max(20, round25(bw * 0.4));
+    case 'cable':
+      // Cable stacks (pushdown, face pull, crunch, pallof) — ~30% bw.
+      return Math.max(10, round25(bw * 0.3));
+    case 'machine':
+      // Machine accessory (leg curl / extension / calf raise) — ~35% bw.
+      return Math.max(10, round25(bw * 0.35));
+    case 'bodyweight':
+    default:
+      return null;
   }
-  return null;
 }
 
 export interface ProgressionSet {

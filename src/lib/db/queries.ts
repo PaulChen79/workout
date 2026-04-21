@@ -1,5 +1,5 @@
 import { db } from './client';
-import { exerciseMaxes, lastWeights, profiles, userProgressionState, workouts } from './schema';
+import { bodyLogs, exerciseMaxes, lastWeights, profiles, userProgressionState, workouts } from './schema';
 import { eq, desc, and } from 'drizzle-orm';
 import { DAY_TEMPLATES, SCHEMES, EXERCISES, type DayKey } from '@/lib/workout-data';
 import { suggestWeight } from '@/lib/formula';
@@ -42,7 +42,13 @@ export interface PlannedSlot {
 export async function buildPlan(userId: string, day: DayKey): Promise<PlannedSlot[]> {
   const tpl = DAY_TEMPLATES[day];
   const [profile] = await db.select().from(profiles).where(eq(profiles.userId, userId)).limit(1);
-  const userWeight = profile?.heightCm ? 70 : 70; // placeholder — could use body_logs
+  void profile;
+  const [latestLog] = await db.select({ weightKg: bodyLogs.weightKg })
+    .from(bodyLogs)
+    .where(eq(bodyLogs.userId, userId))
+    .orderBy(desc(bodyLogs.loggedAt))
+    .limit(1);
+  const userWeight = latestLog ? Number(latestLog.weightKg) : 70;
   const maxesRows = await db.select().from(exerciseMaxes).where(eq(exerciseMaxes.userId, userId));
   const maxes = new Map(maxesRows.map((r) => [r.exerciseId, Number(r.valueKg)]));
   const lastRows = await db.select().from(lastWeights).where(eq(lastWeights.userId, userId));
@@ -71,7 +77,7 @@ export async function buildPlan(userId: string, day: DayKey): Promise<PlannedSlo
     out.push({
       exerciseId: coreId, name: ex.name, muscles: ex.muscles, scheme: 'pump',
       schemeDisplay: ex.timed ? '3×30-60秒' : '3×12-20', sets: 3, repLow: 12, repHigh: 20,
-      pctLabel: '', suggestedWeight: suggestWeight({ trackable: false, lastWeight: lasts.get(coreId) ?? null, equip: ex.equip, userWeight: 70 }),
+      pctLabel: '', suggestedWeight: suggestWeight({ trackable: false, lastWeight: lasts.get(coreId) ?? null, equip: ex.equip, userWeight }),
       trackable: false, isCore: true,
     });
   }
