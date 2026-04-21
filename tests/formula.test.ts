@@ -6,8 +6,9 @@ import {
 
 test('round25 rounds to nearest 2.5', () => {
   assert.equal(round25(62), 62.5);
-  assert.equal(round25(63.75), 63.75);
+  assert.equal(round25(63.75), 65);    // halfway → round up
   assert.equal(round25(64.99), 65);
+  assert.equal(round25(61.24), 60);
   assert.equal(round25(0), 0);
 });
 

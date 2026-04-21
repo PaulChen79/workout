@@ -1,5 +1,5 @@
 export function round25(x: number): number {
-  return Math.round(x / 1.25) * 1.25;
+  return Math.round(x / 2.5) * 2.5;
 }
 
 export function estimate1RM(weight: number, reps: number): number | null {
