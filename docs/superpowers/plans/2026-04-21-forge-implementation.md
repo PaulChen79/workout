@@ -1570,11 +1570,11 @@ export function suggestedDay(last: Record<DayKey, Date | null>): DayKey {
 ```tsx
 'use client';
 import Link from 'next/link';
-import { ChevronRight, Zap, ArrowDown, Footprints } from 'lucide-react';
+import { ChevronRight, Zap, ArrowDown, Footprints, type LucideIcon } from 'lucide-react';
 import type { DayKey } from '@/lib/workout-data';
 import { DAY_TEMPLATES } from '@/lib/workout-data';
 
-const ICONS: Record<DayKey, React.ComponentType<{ size?: number; className?: string }>> = {
+const ICONS: Record<DayKey, LucideIcon> = {
   push: Zap, pull: ArrowDown, legs: Footprints,
 };
 
