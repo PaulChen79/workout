@@ -1,0 +1,39 @@
+{
+  "name": "forge",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "migrate": "tsx scripts/migrate.ts",
+    "drizzle:generate": "drizzle-kit generate",
+    "test": "node --import tsx --test tests/**/*.test.ts",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "drizzle-orm": "^0.36.0",
+    "iron-session": "^8.0.4",
+    "lucide-react": "^0.452.0",
+    "next": "^14.2.15",
+    "postgres": "^3.4.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "autoprefixer": "^10.4.20",
+    "drizzle-kit": "^0.28.0",
+    "eslint": "^8",
+    "eslint-config-next": "^14.2.15",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.14",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.3"
+  }
+}
