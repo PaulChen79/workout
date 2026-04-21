@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Flame, TrendingUp, Pencil, Plus } from 'lucide-react';
+import { Flame, TrendingUp, Pencil, Plus, Trash2 } from 'lucide-react';
 import { EXERCISES } from '@/lib/workout-data';
 import LineChart from './charts/LineChart';
 import BarChart from './charts/BarChart';
@@ -28,6 +28,7 @@ export interface DashboardData {
 export default function Dashboard({ data }: { data: DashboardData }) {
   const [bodyOpen, setBodyOpen] = useState(false);
   const [maxesOpen, setMaxesOpen] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   const router = useRouter();
 
   const weightDelta = data.firstWeight != null && data.latestWeight != null ? +(data.latestWeight - data.firstWeight).toFixed(1) : null;
@@ -35,6 +36,20 @@ export default function Dashboard({ data }: { data: DashboardData }) {
   async function logout() {
     await fetch('/api/auth/logout', { method: 'POST' });
     router.push('/auth'); router.refresh();
+  }
+
+  async function deleteWorkout(id: number, label: string) {
+    if (!window.confirm(`刪除 ${label} 的訓練紀錄？此動作無法復原。`)) return;
+    setDeletingId(id);
+    try {
+      const res = await fetch(`/api/workouts/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error ?? '刪除失敗');
+        return;
+      }
+      router.refresh();
+    } finally { setDeletingId(null); }
   }
 
   return (
@@ -107,15 +122,27 @@ export default function Dashboard({ data }: { data: DashboardData }) {
 
       <Card title="最近訓練">
         <div className="space-y-2">
-          {data.recent.map((r) => (
-            <div key={r.id} className="flex items-center gap-3 text-[12px]">
-              <span className="font-mono tabular-nums text-text-dim w-16">{new Date(r.finishedAt).toLocaleDateString('zh', { month: '2-digit', day: '2-digit' })}</span>
-              <span className="uppercase w-10 text-text-muted">{r.dayKey}</span>
-              <span className="font-mono tabular-nums">{r.setCount} 組</span>
-              <span className="font-mono tabular-nums text-text-muted">{Math.round(r.volume)}kg</span>
-              {r.pr > 0 && <span className="ml-auto text-accent flex items-center gap-1"><Flame size={12} />{r.pr}</span>}
-            </div>
-          ))}
+          {data.recent.map((r) => {
+            const dateLabel = new Date(r.finishedAt).toLocaleDateString('zh', { month: '2-digit', day: '2-digit' });
+            return (
+              <div key={r.id} className="flex items-center gap-3 text-[12px]">
+                <span className="font-mono tabular-nums text-text-dim w-16">{dateLabel}</span>
+                <span className="uppercase w-10 text-text-muted">{r.dayKey}</span>
+                <span className="font-mono tabular-nums">{r.setCount} 組</span>
+                <span className="font-mono tabular-nums text-text-muted">{Math.round(r.volume)}kg</span>
+                {r.pr > 0 && <span className="text-accent flex items-center gap-1"><Flame size={12} />{r.pr}</span>}
+                <button
+                  type="button"
+                  onClick={() => deleteWorkout(r.id, `${dateLabel} ${r.dayKey.toUpperCase()}`)}
+                  disabled={deletingId === r.id}
+                  aria-label="刪除訓練紀錄"
+                  className="ml-auto p-1 text-text-dim hover:text-danger-light disabled:opacity-50"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            );
+          })}
           {data.recent.length === 0 && <p className="text-[12px] text-text-dim">還沒有紀錄</p>}
         </div>
       </Card>

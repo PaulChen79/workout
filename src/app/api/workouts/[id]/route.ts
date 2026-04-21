@@ -82,3 +82,19 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   return NextResponse.json({ ok: true });
 }
+
+export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+  const s = await getSession();
+  if (!s.userId) return NextResponse.json({ error: 'unauth' }, { status: 401 });
+  const userId = s.userId;
+  const workoutId = Number(params.id);
+  if (!Number.isFinite(workoutId)) return NextResponse.json({ error: 'bad id' }, { status: 400 });
+
+  // Ownership-gated delete. workout_sets + exercise_feedback CASCADE via schema FKs.
+  const deleted = await db.delete(workouts)
+    .where(and(eq(workouts.id, workoutId), eq(workouts.userId, userId)))
+    .returning({ id: workouts.id });
+  if (!deleted.length) return NextResponse.json({ error: 'not found' }, { status: 404 });
+
+  return NextResponse.json({ ok: true });
+}
