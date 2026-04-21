@@ -1908,32 +1908,38 @@ export async function POST(req: Request) {
     }
   }
 
-  const [w] = await db.insert(workouts).values({
-    userId: s.userId, dayKey, doneCount: done.length,
-    totalVolume: totalVolume.toString(), prCount: 0,   // prCount updated in PATCH
-  }).returning({ id: workouts.id });
+  // Wrap all DB writes in a transaction so a crash between steps can't
+  // leave partial state (e.g. workout row without sets).
+  const { workoutId } = await db.transaction(async (tx) => {
+    const [w] = await tx.insert(workouts).values({
+      userId: s.userId, dayKey, doneCount: done.length,
+      totalVolume: totalVolume.toString(), prCount: 0,   // prCount updated in PATCH
+    }).returning({ id: workouts.id });
 
-  if (sets.length) {
-    await db.insert(workoutSets).values(sets.map((x) => ({
-      workoutId: w.id, exerciseId: x.exerciseId, setIndex: x.setIndex,
-      weightKg: x.weightKg !== null ? x.weightKg.toString() : null,
-      reps: x.reps, done: x.done, isCore: x.isCore,
-    })));
-  }
+    if (sets.length) {
+      await tx.insert(workoutSets).values(sets.map((x) => ({
+        workoutId: w.id, exerciseId: x.exerciseId, setIndex: x.setIndex,
+        weightKg: x.weightKg !== null ? x.weightKg.toString() : null,
+        reps: x.reps, done: x.done, isCore: x.isCore,
+      })));
+    }
 
-  // last_weights: record top weight used per exercise this session
-  for (const [exId, xs] of byExercise) {
-    const doneX = xs.filter((x) => x.done && x.weightKg);
-    if (!doneX.length) continue;
-    const top = Math.max(...doneX.map((x) => Number(x.weightKg)));
-    await db.insert(lastWeights).values({ userId: s.userId, exerciseId: exId, valueKg: top.toString() })
-      .onConflictDoUpdate({
-        target: [lastWeights.userId, lastWeights.exerciseId],
-        set: { valueKg: top.toString(), updatedAt: new Date() },
-      });
-  }
+    // last_weights: record top weight used per exercise this session
+    for (const [exId, xs] of byExercise) {
+      const doneX = xs.filter((x) => x.done && x.weightKg);
+      if (!doneX.length) continue;
+      const top = Math.max(...doneX.map((x) => Number(x.weightKg)));
+      await tx.insert(lastWeights).values({ userId: s.userId, exerciseId: exId, valueKg: top.toString() })
+        .onConflictDoUpdate({
+          target: [lastWeights.userId, lastWeights.exerciseId],
+          set: { valueKg: top.toString(), updatedAt: new Date() },
+        });
+    }
 
-  return NextResponse.json({ workoutId: w.id, proposals });
+    return { workoutId: w.id };
+  });
+
+  return NextResponse.json({ workoutId, proposals });
 }
 ```
 
@@ -2114,56 +2120,61 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (!parsed.success) return NextResponse.json({ error: '格式錯誤' }, { status: 400 });
   const { feedback, maxAccepts } = parsed.data;
 
-  for (const f of feedback ?? []) {
-    if (f.rir === null) continue;
-    await db.insert(exerciseFeedback).values({ workoutId, exerciseId: f.exerciseId, rir: f.rir })
-      .onConflictDoUpdate({
-        target: [exerciseFeedback.workoutId, exerciseFeedback.exerciseId],
-        set: { rir: f.rir },
-      });
-  }
-  for (const a of maxAccepts ?? []) {
-    await db.insert(exerciseMaxes).values({ userId: s.userId, exerciseId: a.exerciseId, valueKg: a.newMaxKg.toString() })
-      .onConflictDoUpdate({
-        target: [exerciseMaxes.userId, exerciseMaxes.exerciseId],
-        set: { valueKg: a.newMaxKg.toString(), updatedAt: new Date() },
-      });
-  }
-  if (maxAccepts?.length) {
-    await db.update(workouts).set({ prCount: maxAccepts.length }).where(eq(workouts.id, workoutId));
-  }
+  // Wrap feedback + max accepts + prCount update + progression upserts in a
+  // single transaction. Ownership SELECT and parse stay outside; the
+  // workoutSets SELECT moves inside so progression sees consistent state.
+  await db.transaction(async (tx) => {
+    for (const f of feedback ?? []) {
+      if (f.rir === null) continue;
+      await tx.insert(exerciseFeedback).values({ workoutId, exerciseId: f.exerciseId, rir: f.rir })
+        .onConflictDoUpdate({
+          target: [exerciseFeedback.workoutId, exerciseFeedback.exerciseId],
+          set: { rir: f.rir },
+        });
+    }
+    for (const a of maxAccepts ?? []) {
+      await tx.insert(exerciseMaxes).values({ userId: s.userId, exerciseId: a.exerciseId, valueKg: a.newMaxKg.toString() })
+        .onConflictDoUpdate({
+          target: [exerciseMaxes.userId, exerciseMaxes.exerciseId],
+          set: { valueKg: a.newMaxKg.toString(), updatedAt: new Date() },
+        });
+    }
+    if (maxAccepts?.length) {
+      await tx.update(workouts).set({ prCount: maxAccepts.length }).where(eq(workouts.id, workoutId));
+    }
 
-  // Progression update: re-read sets for this workout and apply
-  const sets = await db.select().from(workoutSets).where(eq(workoutSets.workoutId, workoutId));
-  const byExercise = new Map<string, typeof sets>();
-  for (const st of sets) {
-    if (!byExercise.has(st.exerciseId)) byExercise.set(st.exerciseId, []);
-    byExercise.get(st.exerciseId)!.push(st);
-  }
-  const tpl = DAY_TEMPLATES[w.dayKey as DayKey];
-  for (const slot of tpl.slots) {
-    const ex = EXERCISES[slot.id];
-    if (!ex.trackable) continue;
-    const slotSets = (byExercise.get(slot.id) ?? []).map((x) => ({ done: x.done, reps: x.reps }));
-    if (!slotSets.length) continue;
-    const rir = feedback?.find((f) => f.exerciseId === slot.id)?.rir ?? null;
-    const scheme = SCHEMES[slot.scheme];
-    const [existing] = await db.select().from(userProgressionState)
-      .where(and(
-        eq(userProgressionState.userId, s.userId),
-        eq(userProgressionState.exerciseId, slot.id),
-        eq(userProgressionState.scheme, slot.scheme),
-      )).limit(1);
-    const current = existing ? { currentPct: Number(existing.currentPct), streak: existing.streak } : { currentPct: scheme.pctLow, streak: 0 };
-    const next = updateProgression({ sets: slotSets, rir, scheme, state: current });
-    await db.insert(userProgressionState).values({
-      userId: s.userId, exerciseId: slot.id, scheme: slot.scheme,
-      currentPct: next.currentPct.toFixed(3), streak: next.streak,
-    }).onConflictDoUpdate({
-      target: [userProgressionState.userId, userProgressionState.exerciseId, userProgressionState.scheme],
-      set: { currentPct: next.currentPct.toFixed(3), streak: next.streak, updatedAt: new Date() },
-    });
-  }
+    // Progression update: re-read sets for this workout and apply
+    const sets = await tx.select().from(workoutSets).where(eq(workoutSets.workoutId, workoutId));
+    const byExercise = new Map<string, typeof sets>();
+    for (const st of sets) {
+      if (!byExercise.has(st.exerciseId)) byExercise.set(st.exerciseId, []);
+      byExercise.get(st.exerciseId)!.push(st);
+    }
+    const tpl = DAY_TEMPLATES[w.dayKey as DayKey];
+    for (const slot of tpl.slots) {
+      const ex = EXERCISES[slot.id];
+      if (!ex.trackable) continue;
+      const slotSets = (byExercise.get(slot.id) ?? []).map((x) => ({ done: x.done, reps: x.reps }));
+      if (!slotSets.length) continue;
+      const rir = feedback?.find((f) => f.exerciseId === slot.id)?.rir ?? null;
+      const scheme = SCHEMES[slot.scheme];
+      const [existing] = await tx.select().from(userProgressionState)
+        .where(and(
+          eq(userProgressionState.userId, s.userId),
+          eq(userProgressionState.exerciseId, slot.id),
+          eq(userProgressionState.scheme, slot.scheme),
+        )).limit(1);
+      const current = existing ? { currentPct: Number(existing.currentPct), streak: existing.streak } : { currentPct: scheme.pctLow, streak: 0 };
+      const next = updateProgression({ sets: slotSets, rir, scheme, state: current });
+      await tx.insert(userProgressionState).values({
+        userId: s.userId, exerciseId: slot.id, scheme: slot.scheme,
+        currentPct: next.currentPct.toFixed(3), streak: next.streak,
+      }).onConflictDoUpdate({
+        target: [userProgressionState.userId, userProgressionState.exerciseId, userProgressionState.scheme],
+        set: { currentPct: next.currentPct.toFixed(3), streak: next.streak, updatedAt: new Date() },
+      });
+    }
+  });
 
   return NextResponse.json({ ok: true });
 }
@@ -2171,7 +2182,9 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
 - [ ] **Step 13.5: Update FinishScreen save() to PATCH /api/workouts/[id]**
 
-In `src/components/FinishScreen.tsx` replace the `save()` function body with:
+In `src/components/FinishScreen.tsx` replace the `save()` function body with
+(check `res.ok` so a 401/500/network error doesn't silently drop the user's RIR
++ PR acceptance — leave sessionStorage intact so they can retry):
 ```ts
 async function save() {
   if (!data) return;
@@ -2180,12 +2193,21 @@ async function save() {
     .filter((p) => accepted[p.exerciseId]?.on)
     .map((p) => ({ exerciseId: p.exerciseId, newMaxKg: accepted[p.exerciseId].value }));
   const feedback = Object.entries(rir).map(([exerciseId, v]) => ({ exerciseId, rir: v }));
-  await fetch(`/api/workouts/${data.workoutId}`, {
-    method: 'PATCH', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ feedback, maxAccepts }),
-  });
-  sessionStorage.removeItem('forge_finish');
-  router.push('/progress');
+  try {
+    const res = await fetch(`/api/workouts/${data.workoutId}`, {
+      method: 'PATCH', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ feedback, maxAccepts }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      alert(err.error ?? '儲存失敗');
+      return;
+    }
+    sessionStorage.removeItem('forge_finish');
+    router.push('/progress');
+  } finally {
+    setSaving(false);
+  }
 }
 ```
 

@@ -10,6 +10,7 @@ import { eq, and } from 'drizzle-orm';
 export async function POST(req: Request) {
   const s = await getSession();
   if (!s.userId) return NextResponse.json({ error: 'unauth' }, { status: 401 });
+  const userId = s.userId;
 
   const parsed = workoutPostSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: '格式錯誤' }, { status: 400 });
@@ -38,35 +39,39 @@ export async function POST(req: Request) {
     }
     if (best > 0) {
       const [oldRow] = await db.select().from(exerciseMaxes)
-        .where(and(eq(exerciseMaxes.userId, s.userId), eq(exerciseMaxes.exerciseId, exId))).limit(1);
+        .where(and(eq(exerciseMaxes.userId, userId), eq(exerciseMaxes.exerciseId, exId))).limit(1);
       const oldMax = oldRow ? Number(oldRow.valueKg) : null;
       proposals.push({ exerciseId: exId, oldMax, estimate: round25(best) });
     }
   }
 
-  const [w] = await db.insert(workouts).values({
-    userId: s.userId, dayKey, doneCount: done.length,
-    totalVolume: totalVolume.toString(), prCount: 0,
-  }).returning({ id: workouts.id });
+  const { workoutId } = await db.transaction(async (tx) => {
+    const [w] = await tx.insert(workouts).values({
+      userId, dayKey, doneCount: done.length,
+      totalVolume: totalVolume.toString(), prCount: 0,
+    }).returning({ id: workouts.id });
 
-  if (sets.length) {
-    await db.insert(workoutSets).values(sets.map((x) => ({
-      workoutId: w.id, exerciseId: x.exerciseId, setIndex: x.setIndex,
-      weightKg: x.weightKg !== null ? x.weightKg.toString() : null,
-      reps: x.reps, done: x.done, isCore: x.isCore,
-    })));
-  }
+    if (sets.length) {
+      await tx.insert(workoutSets).values(sets.map((x) => ({
+        workoutId: w.id, exerciseId: x.exerciseId, setIndex: x.setIndex,
+        weightKg: x.weightKg !== null ? x.weightKg.toString() : null,
+        reps: x.reps, done: x.done, isCore: x.isCore,
+      })));
+    }
 
-  for (const [exId, xs] of byExercise) {
-    const doneX = xs.filter((x) => x.done && x.weightKg);
-    if (!doneX.length) continue;
-    const top = Math.max(...doneX.map((x) => Number(x.weightKg)));
-    await db.insert(lastWeights).values({ userId: s.userId, exerciseId: exId, valueKg: top.toString() })
-      .onConflictDoUpdate({
-        target: [lastWeights.userId, lastWeights.exerciseId],
-        set: { valueKg: top.toString(), updatedAt: new Date() },
-      });
-  }
+    for (const [exId, xs] of byExercise) {
+      const doneX = xs.filter((x) => x.done && x.weightKg);
+      if (!doneX.length) continue;
+      const top = Math.max(...doneX.map((x) => Number(x.weightKg)));
+      await tx.insert(lastWeights).values({ userId, exerciseId: exId, valueKg: top.toString() })
+        .onConflictDoUpdate({
+          target: [lastWeights.userId, lastWeights.exerciseId],
+          set: { valueKg: top.toString(), updatedAt: new Date() },
+        });
+    }
 
-  return NextResponse.json({ workoutId: w.id, proposals });
+    return { workoutId: w.id };
+  });
+
+  return NextResponse.json({ workoutId, proposals });
 }

@@ -44,12 +44,21 @@ export default function FinishScreen() {
       .filter((p) => accepted[p.exerciseId]?.on)
       .map((p) => ({ exerciseId: p.exerciseId, newMaxKg: accepted[p.exerciseId].value }));
     const feedback = Object.entries(rir).map(([exerciseId, v]) => ({ exerciseId, rir: v }));
-    await fetch(`/api/workouts/${data.workoutId}`, {
-      method: 'PATCH', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ feedback, maxAccepts }),
-    });
-    sessionStorage.removeItem('forge_finish');
-    router.push('/progress');
+    try {
+      const res = await fetch(`/api/workouts/${data.workoutId}`, {
+        method: 'PATCH', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ feedback, maxAccepts }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error ?? '儲存失敗');
+        return;
+      }
+      sessionStorage.removeItem('forge_finish');
+      router.push('/progress');
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
