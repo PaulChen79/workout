@@ -1,0 +1,27 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: forge
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: forge
+    volumes:
+      - forge-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U forge -d forge"]
+      interval: 3s
+      retries: 20
+
+  web:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://forge:${DB_PASSWORD}@db:5432/forge
+      SESSION_SECRET: ${SESSION_SECRET}
+    ports:
+      - "3000:3000"
+
+volumes:
+  forge-db:
