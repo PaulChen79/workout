@@ -300,7 +300,7 @@ RUN apk add --no-cache dumb-init
 # standalone output + static + public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/public ./public 2>/dev/null || true
+COPY --from=builder /app/public ./public
 # migrations + migrate script must be accessible at runtime
 COPY --from=builder /app/migrations ./migrations
 COPY --from=builder /app/scripts ./scripts
@@ -391,10 +391,19 @@ async function main() {
 main().catch((e) => { console.error(e); process.exit(1); });
 ```
 
+- [ ] **Step 2.5b: Ensure `public/` exists for Dockerfile COPY**
+
+Dockerfile `COPY` has no shell, so `COPY --from=builder /app/public ./public` fails the build if the directory is missing. Create it with a tracked placeholder so it always exists in the builder stage:
+
+```bash
+mkdir -p public
+touch public/.gitkeep
+```
+
 - [ ] **Step 2.6: Commit**
 
 ```bash
-git add Dockerfile .dockerignore docker-compose.yml .env.example scripts/migrate.ts
+git add Dockerfile .dockerignore docker-compose.yml .env.example scripts/migrate.ts public/.gitkeep
 git commit -m "chore: dockerize app + compose with postgres"
 ```
 
