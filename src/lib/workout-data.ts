@@ -69,6 +69,27 @@ export const SCHEMES: Record<SchemeId, Scheme> = {
   pump:        { name: '泵感',   pctLow: 0.50, pctHigh: 0.60, repLow: 12, repHigh: 15, rest: 60, rir: [0,2], note: '代謝壓力 — 短休、衝 15 下' },
 };
 
+// Accessory → parent main-lift 1RM ratios. Used to derive a starting weight
+// for accessories (or trackables without an onboarding-set max) from the
+// user's main-lift max. Typical intermediate-lifter ratios.
+export const ACCESSORY_RATIOS: Record<string, { parent: string; ratio: number }> = {
+  // Push
+  incline_bench:           { parent: 'bench_press', ratio: 0.75 },
+  dumbbell_press:          { parent: 'bench_press', ratio: 0.45 },
+  dumbbell_shoulder_press: { parent: 'ohp',         ratio: 0.50 },
+  // Pull
+  lat_pulldown:  { parent: 'barbell_row', ratio: 0.95 },
+  seated_row:    { parent: 'barbell_row', ratio: 0.90 },
+  dumbbell_row:  { parent: 'barbell_row', ratio: 0.55 },
+  barbell_curl:  { parent: 'bench_press', ratio: 0.30 },
+  hammer_curl:   { parent: 'bench_press', ratio: 0.25 },
+  // Legs
+  rdl:           { parent: 'deadlift',    ratio: 0.75 },
+  front_squat:   { parent: 'back_squat',  ratio: 0.85 },
+  leg_press:     { parent: 'back_squat',  ratio: 1.50 },
+  hip_thrust:    { parent: 'back_squat',  ratio: 1.00 },
+};
+
 export type DayKey = 'push' | 'pull' | 'legs';
 
 export interface Slot { id: string; sets: number; scheme: SchemeId; }

@@ -10,44 +10,43 @@ export function estimate1RM(weight: number, reps: number): number | null {
   return null;
 }
 
-export interface SuggestWeightTrackable {
-  trackable: true;
-  oneRM: number | null;
-  currentPct: number | null;
+export interface SuggestWeightInput {
+  trackable: boolean;
+  oneRM?: number | null;          // own 1RM if trackable and set
+  currentPct?: number | null;
   pctLow?: number;
   pctHigh?: number;
-}
-export interface SuggestWeightNonTrackable {
-  trackable: false;
-  lastWeight: number | null;
+  lastWeight?: number | null;     // last recorded work weight on this exercise
+  derivedMax?: number | null;     // parent-lift max × accessory ratio (1st-time accessory fallback)
   equip?: 'barbell' | 'dumbbell' | 'machine' | 'bodyweight' | 'cable';
   userWeight?: number;
 }
 
-export function suggestWeight(
-  input: SuggestWeightTrackable | SuggestWeightNonTrackable,
-): number | null {
-  if (input.trackable) {
-    if (!input.oneRM) return null;
+// Priority (first non-null wins):
+//   1. trackable && own oneRM    → max × scheme pct          (main lifts)
+//   2. lastWeight                → last session's load       (accessories after 1st training)
+//   3. derivedMax × scheme pct   → parent × ratio × pct      (1st-time accessory, e.g. incline from bench)
+//   4. equipment × body weight   → rough starting point      (no mapping available)
+//   5. null                       → bodyweight / unknown      (pullup, plank, ab_wheel)
+export function suggestWeight(input: SuggestWeightInput): number | null {
+  const fromMax = (max: number) => {
     const pct = input.currentPct ?? input.pctLow ?? 0.7;
-    return round25(input.oneRM * pct);
-  }
-  if (input.lastWeight) return input.lastWeight;
-  // First-time fallback based on equipment type × user body weight.
-  // Kept conservative — the user will Edit on the workout screen.
+    return round25(max * pct);
+  };
+
+  if (input.trackable && input.oneRM && input.oneRM > 0) return fromMax(input.oneRM);
+  if (input.lastWeight && input.lastWeight > 0) return input.lastWeight;
+  if (input.derivedMax && input.derivedMax > 0) return fromMax(input.derivedMax);
+
   const bw = input.userWeight ?? 70;
   switch (input.equip) {
     case 'dumbbell':
-      // Single-dumbbell accessory work (rows / curls / lateral raise) — 15% bw, 2kg increments.
       return Math.max(8, Math.round((bw * 0.15) / 2) * 2);
     case 'barbell':
-      // Accessory barbell (incline bench, front squat) — start near empty bar.
       return Math.max(20, round25(bw * 0.4));
     case 'cable':
-      // Cable stacks (pushdown, face pull, crunch, pallof) — ~30% bw.
       return Math.max(10, round25(bw * 0.3));
     case 'machine':
-      // Machine accessory (leg curl / extension / calf raise) — ~35% bw.
       return Math.max(10, round25(bw * 0.35));
     case 'bodyweight':
     default:

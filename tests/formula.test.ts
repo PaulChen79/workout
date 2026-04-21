@@ -69,6 +69,42 @@ test('suggestWeight: non-trackable bodyweight returns null', () => {
   assert.equal(suggestWeight({ trackable: false, lastWeight: null, equip: 'bodyweight', userWeight: 70 }), null);
 });
 
+test('suggestWeight: accessory uses derivedMax × scheme pct on first session', () => {
+  // bench 80kg → incline derivedMax 60kg → hypertrophy (pctLow 0.65) → 60*0.65=39 → round25=40
+  const w = suggestWeight({
+    trackable: false, lastWeight: null, derivedMax: 60, pctLow: 0.65, pctHigh: 0.75,
+    equip: 'barbell', userWeight: 70,
+  });
+  assert.equal(w, 40);
+});
+
+test('suggestWeight: lastWeight wins over derivedMax', () => {
+  const w = suggestWeight({
+    trackable: false, lastWeight: 45, derivedMax: 60, pctLow: 0.65,
+    equip: 'barbell', userWeight: 70,
+  });
+  assert.equal(w, 45);
+});
+
+test('suggestWeight: trackable without oneRM falls through to derivedMax', () => {
+  // rdl: trackable=true, oneRM=null, derived from deadlift 100*0.75 = 75
+  // strength (pctLow 0.80) → 75*0.80=60 → round25=60
+  const w = suggestWeight({
+    trackable: true, oneRM: null, derivedMax: 75,
+    currentPct: null, pctLow: 0.80, pctHigh: 0.85,
+    equip: 'barbell', userWeight: 70,
+  });
+  assert.equal(w, 60);
+});
+
+test('suggestWeight: trackable without oneRM and no derivedMax uses bw fallback', () => {
+  // barbell no ratio, no derived, bw=70 → max(20, round25(28)) = 27.5
+  const w = suggestWeight({
+    trackable: true, oneRM: null, equip: 'barbell', userWeight: 70,
+  });
+  assert.equal(w, 27.5);
+});
+
 test('suggestWeight: non-trackable dumbbell fallback from userWeight', () => {
   const w = suggestWeight({ trackable: false, lastWeight: null, equip: 'dumbbell', userWeight: 70 });
   // max(8, round(70*0.15 / 2) * 2) = max(8, round(5.25)*2) = max(8,10) = 10
