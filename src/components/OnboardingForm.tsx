@@ -42,9 +42,9 @@ export default function OnboardingForm() {
       </header>
 
       <section className="space-y-3">
-        <Stepper label="身高 (cm)" value={heightCm} onChange={setHeightCm} step={1} min={100} max={250} />
-        <Stepper label="體重 (kg)" value={weightKg} onChange={setWeightKg} step={0.5} min={30} max={300} />
-        <Stepper label="年齡"       value={age}      onChange={setAge}      step={1} min={10} max={120} />
+        <Stepper label="身高" unit="cm" value={heightCm} onChange={setHeightCm} step={1} min={100} max={250} />
+        <Stepper label="體重" unit="kg" value={weightKg} onChange={setWeightKg} step={0.5} min={30} max={300} />
+        <Stepper label="年齡" unit="歲" value={age}      onChange={setAge}      step={1} min={10} max={120} />
         <div>
           <p className="text-[10px] uppercase tracking-wider text-text-dim mb-2 font-semibold">目標</p>
           <div className="grid grid-cols-2 gap-2">
@@ -79,14 +79,19 @@ export default function OnboardingForm() {
   );
 }
 
-function Stepper({ label, value, onChange, step, min, max }: { label: string; value: number; onChange: (v: number) => void; step: number; min: number; max: number }) {
+function Stepper({ label, unit, value, onChange, step, min, max }: { label: string; unit?: string; value: number; onChange: (v: number) => void; step: number; min: number; max: number }) {
   return (
     <div className="flex items-center justify-between h-14 px-4 rounded-xl bg-surface-2 border border-border-2">
       <span className="text-[13px] font-semibold text-text-muted">{label}</span>
-      <div className="flex items-center gap-3">
-        <button type="button" onClick={() => onChange(Math.max(min, value - step))} className="w-9 h-9 rounded-lg bg-surface border border-border-2 text-xl">−</button>
-        <span className="font-mono text-[18px] font-bold tabular-nums w-20 text-center">{value}</span>
-        <button type="button" onClick={() => onChange(Math.min(max, value + step))} className="w-9 h-9 rounded-lg bg-surface border border-border-2 text-xl">+</button>
+      <div className="flex items-center gap-2">
+        <button type="button" onClick={() => onChange(Math.max(min, +(value - step).toFixed(2)))} className="w-9 h-9 rounded-lg bg-surface border border-border-2 text-xl">−</button>
+        <input
+          type="number" inputMode="decimal" step={step} min={min} max={max} value={value}
+          onChange={(e) => { const v = parseFloat(e.target.value); if (!Number.isNaN(v)) onChange(Math.min(max, Math.max(min, v))); }}
+          className="font-mono text-[18px] font-bold tabular-nums w-20 text-center bg-transparent outline-none rounded focus:bg-surface"
+        />
+        {unit && <span className="text-[13px] text-text-dim w-6">{unit}</span>}
+        <button type="button" onClick={() => onChange(Math.min(max, +(value + step).toFixed(2)))} className="w-9 h-9 rounded-lg bg-surface border border-border-2 text-xl">+</button>
       </div>
     </div>
   );
@@ -108,7 +113,12 @@ function MaxRow({ id, value, onChange }: { id: string; value: number; onChange: 
         </div>
         <div className="flex items-center gap-2">
           <button type="button" onClick={() => onChange(Math.max(0, value - 2.5))} className="w-8 h-8 rounded-md bg-surface border border-border-2">−</button>
-          <span className="font-mono text-[17px] tabular-nums font-bold w-16 text-center">{value}</span>
+          <input
+            type="number" inputMode="decimal" step={2.5} min={0} value={value}
+            onChange={(e) => { const v = parseFloat(e.target.value); if (!Number.isNaN(v)) onChange(Math.max(0, v)); }}
+            className="font-mono text-[17px] tabular-nums font-bold w-16 text-center bg-transparent outline-none rounded focus:bg-surface"
+          />
+          <span className="text-[12px] text-text-dim">kg</span>
           <button type="button" onClick={() => onChange(value + 2.5)} className="w-8 h-8 rounded-md bg-surface border border-border-2">+</button>
         </div>
       </div>

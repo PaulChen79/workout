@@ -16,6 +16,13 @@ export default function EditMaxesModal({ current, onClose }: { current: Record<s
       method: 'PATCH', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ maxes: TRACKABLE.map((id) => ({ exerciseId: id, valueKg: values[id] ?? 0 })) }),
     });
+    // Clear any cached workout drafts so the next session uses fresh pre-filled weights from the new maxes
+    try {
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('forge_draft_')) localStorage.removeItem(k);
+      }
+    } catch {}
     setSaving(false); onClose(); router.refresh();
   }
 
@@ -29,9 +36,14 @@ export default function EditMaxesModal({ current, onClose }: { current: Record<s
             <div key={id} className="flex items-center justify-between h-12 px-3 rounded-xl bg-surface-2 border border-border-2">
               <span className="text-[13px]">{EXERCISES[id].name}</span>
               <div className="flex items-center gap-2">
-                <button onClick={() => setValues({ ...values, [id]: Math.max(0, (values[id] ?? 0) - 2.5) })} className="w-8 h-8 rounded bg-surface border border-border-2">−</button>
-                <span className="w-16 text-center font-mono tabular-nums font-bold">{values[id] ?? 0}</span>
-                <button onClick={() => setValues({ ...values, [id]: (values[id] ?? 0) + 2.5 })} className="w-8 h-8 rounded bg-surface border border-border-2">+</button>
+                <button type="button" onClick={() => setValues({ ...values, [id]: Math.max(0, (values[id] ?? 0) - 2.5) })} className="w-8 h-8 rounded bg-surface border border-border-2">−</button>
+                <input
+                  type="number" inputMode="decimal" step={2.5} min={0} value={values[id] ?? 0}
+                  onChange={(e) => { const v = parseFloat(e.target.value); if (!Number.isNaN(v)) setValues({ ...values, [id]: Math.max(0, v) }); }}
+                  className="w-16 text-center font-mono tabular-nums font-bold bg-transparent outline-none rounded focus:bg-surface"
+                />
+                <span className="text-[12px] text-text-dim">kg</span>
+                <button type="button" onClick={() => setValues({ ...values, [id]: (values[id] ?? 0) + 2.5 })} className="w-8 h-8 rounded bg-surface border border-border-2">+</button>
               </div>
             </div>
           ))}
